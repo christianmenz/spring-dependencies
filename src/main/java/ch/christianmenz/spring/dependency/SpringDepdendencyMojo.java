@@ -1,5 +1,6 @@
 package ch.christianmenz.spring.dependency;
 
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -60,12 +61,13 @@ public class SpringDepdendencyMojo extends AbstractMojo {
     public void execute() throws MojoExecutionException, MojoFailureException {
         try {
             List<URL> urlList = project.getDependencyArtifacts().parallelStream().map(artifact -> toURL(artifact)).collect(Collectors.toList());
-            urlList.add(0, toURL(project.getArtifact()));
-            classLoader = new URLClassLoader(urlList.toArray(new URL[0]));
-            
+            urlList.add(0, toURL(project.getArtifact()));                                    
+            if (webApplication) {
+                urlList.add(new File(project.getBuild().getOutputDirectory()).toURI().toURL());                
+            }            
+            classLoader = new URLClassLoader(urlList.toArray(new URL[0]));            
             ResourceLoader loader = new DefaultResourceLoader(classLoader);
-            resolver = new PathMatchingResourcePatternResolver(loader);
-            
+            resolver = new PathMatchingResourcePatternResolver(loader);            
             String[] configResource = findConfigResources();
 
             for (String configLocation : configResource) {
