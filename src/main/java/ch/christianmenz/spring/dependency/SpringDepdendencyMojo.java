@@ -1,5 +1,6 @@
 package ch.christianmenz.spring.dependency;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -8,9 +9,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
+import javax.xml.xpath.XPathExpressionException;
 import org.apache.commons.lang.StringUtils;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.AbstractMojo;
@@ -25,7 +28,7 @@ import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
-import org.springframework.core.io.support.ResourcePatternResolver;
+import org.xml.sax.SAXException;
 
 /**
  *
@@ -45,6 +48,9 @@ public class SpringDepdendencyMojo extends AbstractMojo {
 
     @Parameter
     private boolean printUrl;
+    
+    @Parameter
+    private boolean webApplication;
 
     private XMLInputFactory xmlInputFactory = XMLInputFactory.newInstance();
     private PathMatchingResourcePatternResolver resolver;
@@ -59,8 +65,10 @@ public class SpringDepdendencyMojo extends AbstractMojo {
             
             ResourceLoader loader = new DefaultResourceLoader(classLoader);
             resolver = new PathMatchingResourcePatternResolver(loader);
+            
+            String[] configResource = findConfigResources();
 
-            for (String configLocation : configLocations) {
+            for (String configLocation : configResource) {
                 printDependencies(configLocation, 0, new LinkedHashSet<String>());
             }
         } catch (Exception e) {
@@ -103,6 +111,15 @@ public class SpringDepdendencyMojo extends AbstractMojo {
                     printDependencies(importResource, nestingDepth, new LinkedHashSet<>(loadedResources));
                 }
             }
+        }
+    }
+
+    private String[] findConfigResources() throws XMLStreamException, FileNotFoundException, SAXException, IOException, ParserConfigurationException, XPathExpressionException {
+        if (webApplication) {
+            WebXmlResourceReader webXmlResourceReader = new WebXmlResourceReader();
+            return webXmlResourceReader.readConfigContextLocations();
+        } else {
+            return this.configLocations;
         }
     }
 }
