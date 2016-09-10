@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamException;
@@ -24,7 +26,6 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.core.io.support.ResourcePatternResolver;
-import org.springframework.core.io.support.ResourcePatternUtils;
 
 /**
  *
@@ -46,16 +47,21 @@ public class SpringDepdendencyMojo extends AbstractMojo {
     private boolean printUrl;
 
     private XMLInputFactory xmlInputFactory = XMLInputFactory.newInstance();
+    private PathMatchingResourcePatternResolver resolver;
+    private URLClassLoader classLoader;
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         try {
             List<URL> urlList = project.getDependencyArtifacts().parallelStream().map(artifact -> toURL(artifact)).collect(Collectors.toList());
             urlList.add(0, toURL(project.getArtifact()));
-            URLClassLoader classLoader = new URLClassLoader(urlList.toArray(new URL[0]));
+            classLoader = new URLClassLoader(urlList.toArray(new URL[0]));
+            
+            ResourceLoader loader = new DefaultResourceLoader(classLoader);
+            resolver = new PathMatchingResourcePatternResolver(loader);
 
             for (String configLocation : configLocations) {
-                printDependencies(configLocation, classLoader, 0);
+                printDependencies(configLocation, 0, new LinkedHashSet<String>());
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -72,13 +78,15 @@ public class SpringDepdendencyMojo extends AbstractMojo {
         return null;
     }
 
-    private void printDependencies(final String resourcePath, final URLClassLoader classLoader, int nestingDepth) throws IOException, XMLStreamException {
-        ResourceLoader loader = new DefaultResourceLoader(classLoader);
-        ResourcePatternResolver resolver = new PathMatchingResourcePatternResolver(loader);        
+    private void printDependencies(final String resourcePath, int nestingDepth, Set<String> loadedResources) throws IOException, XMLStreamException {
+      
         Resource[] resources = resolver.getResources(resourcePath);
         String depthIndicator = StringUtils.repeat("  ", nestingDepth);
-
-        for (Resource resource : resources) {
+                
+        for (Resource resource : resources) {                       
+            if (!loadedResources.add(resource.getURL().getPath())) {
+                throw new RuntimeException("Cyclic dependency detected. Please check your configuration");
+            }            
             if (printUrl) {
                 System.out.println(depthIndicator + resource.getURL());
             } else {
@@ -92,7 +100,7 @@ public class SpringDepdendencyMojo extends AbstractMojo {
                 xmlStreamReader.next();
                 if (xmlStreamReader.isStartElement() && xmlStreamReader.getLocalName().equals("import")) {
                     String importResource = xmlStreamReader.getAttributeValue(null, "resource");
-                    printDependencies(importResource, classLoader, nestingDepth);
+                    printDependencies(importResource, nestingDepth, new LinkedHashSet<>(loadedResources));
                 }
             }
         }
