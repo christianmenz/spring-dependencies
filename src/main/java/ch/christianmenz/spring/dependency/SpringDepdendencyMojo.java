@@ -60,7 +60,7 @@ public class SpringDepdendencyMojo extends AbstractMojo {
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         try {
-            List<URL> urlList = project.getDependencyArtifacts().parallelStream().map(artifact -> toURL(artifact)).collect(Collectors.toList());
+            List<URL> urlList = project.getDependencyArtifacts().stream().map(artifact -> toURL(artifact)).collect(Collectors.toList());
             urlList.add(0, toURL(project.getArtifact()));                                    
             if (webApplication) {
                 urlList.add(new File(project.getBuild().getOutputDirectory()).toURI().toURL());                
